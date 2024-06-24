@@ -12,7 +12,7 @@
                     </select>
                 </div>
                 <div class="layui-input-inline">
-                    <input type="text" autocomplete="off" placeholder="{:lang('wd')}" class="layui-input" name="wd" value="{$param['wd']}">
+                    <input type="text" autocomplete="off" placeholder="{:lang('wd')}" class="layui-input" name="wd" value="{$param['wd']|mac_filter_xss}">
                 </div>
                 <button class="layui-btn mgl-20 j-search" >{:lang('btn_search')}</button>
             </form>
@@ -57,8 +57,8 @@
                 <td>{$vo.cash_bank_no|htmlspecialchars}</td>
                 <td>{$vo.cash_payee_name|htmlspecialchars}</td>
                 <td>{$vo.cash_remarks|htmlspecialchars}</td>
-                <td>{$vo.cash_time|mac_day=color}</td>
-                <td>{$vo.cash_time_audit|mac_day=color}</td>
+                <td>{$vo.cash_time|mac_day='color'}</td>
+                <td>{$vo.cash_time_audit|mac_day='color'}</td>
                 <td>
                     <a class="layui-badge-rim j-tr-del" data-href="{:url('del?ids='.$vo['cash_id'])}" href="javascript:;" title="{:lang('del')}">{:lang('del')}</a>
                     {if condition="$vo.cash_status neq '1'"}

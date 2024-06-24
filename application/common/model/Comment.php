@@ -41,6 +41,7 @@ class Comment extends Base {
         $user_ids=[];
         foreach($list as $k=>$v){
             $list[$k]['user_portrait'] = mac_get_user_portrait($v['user_id']);
+            $list[$k]['comment_content'] = mac_restore_htmlfilter($list[$k]['comment_content']);
 
             $where2=[];
             $where2['comment_pid'] = $v['comment_id'];
@@ -49,6 +50,7 @@ class Comment extends Base {
             $list[$k]['sub'] = $sub;
             foreach($sub as $k2=>$v2){
                 $list[$k]['sub'][$k2]['user_portrait'] = mac_get_user_portrait($v2['user_id']);
+                $list[$k]['sub'][$k2]['comment_content'] = mac_restore_htmlfilter($list[$k]['sub'][$k2]['comment_content']);
             }
             $list[$k]['data'] = [];
             if($v['comment_mid'] == 1){
@@ -212,6 +214,18 @@ class Comment extends Base {
         $validate = \think\Loader::validate('Comment');
         if(!$validate->check($data)){
             return ['code'=>1001,'msg'=>lang('param_err').'：'.$validate->getError() ];
+        }
+
+        // xss过滤
+        $filter_fields = [
+            'comment_name',
+            'comment_content',
+        ];
+        foreach ($filter_fields as $filter_field) {
+            if (!isset($data[$filter_field])) {
+                continue;
+            }
+            $data[$filter_field] = mac_filter_xss($data[$filter_field]);
         }
 
         if(!empty($data['comment_id'])){

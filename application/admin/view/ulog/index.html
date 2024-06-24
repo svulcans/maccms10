@@ -24,7 +24,7 @@
                     </select>
                 </div>
                 <div class="layui-input-inline">
-                    <input type="text" autocomplete="off" placeholder="{:lang('wd')}" class="layui-input" name="wd" value="{$param['wd']}">
+                    <input type="text" autocomplete="off" placeholder="{:lang('wd')}" class="layui-input" name="wd" value="{$param['wd']|mac_filter_xss}">
                 </div>
                 <button class="layui-btn mgl-20 j-search" >{:lang('btn_search')}</button>
             </form>
@@ -63,7 +63,7 @@
                 <td>{$vo.ulog_points}</td>
                 <td>{$vo.ulog_rid} {if condition="$vo.ulog_sid gt 0"}-{$vo.ulog_sid}{/if}{if condition="$vo.ulog_nid gt 0"}-{$vo.ulog_nid}{/if}</td>
                 <td>[{$vo.data.name}]</td>
-                <td>{$vo.ulog_time|mac_day=color}</td>
+                <td>{$vo.ulog_time|mac_day='color'}</td>
                 <td>
                     <a class="layui-badge-rim j-tr-del" data-href="{:url('del?ids='.$vo['ulog_id'])}" href="javascript:;" title="{:lang('del')}">{:lang('del')}</a>
                 </td>

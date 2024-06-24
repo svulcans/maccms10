@@ -14,7 +14,7 @@ CREATE TABLE `mac_actor` (
   `actor_letter` char(1) NOT NULL DEFAULT '' ,
   `actor_sex` char(1) NOT NULL DEFAULT '',
   `actor_color` varchar(6) NOT NULL DEFAULT '' ,
-  `actor_pic` varchar(255) NOT NULL DEFAULT '' ,
+  `actor_pic` varchar(1024) NOT NULL DEFAULT '' ,
   `actor_blurb` varchar(255) NOT NULL DEFAULT '',
   `actor_remarks` varchar(100) NOT NULL DEFAULT '' ,
   `actor_area` varchar(20) NOT NULL DEFAULT '',
@@ -120,9 +120,9 @@ CREATE TABLE `mac_art` (
   `art_author` varchar(30) NOT NULL DEFAULT '' ,
   `art_tag` varchar(100) NOT NULL DEFAULT '' ,
   `art_class` varchar(255) NOT NULL DEFAULT '' ,
-  `art_pic` varchar(255) NOT NULL DEFAULT '' ,
-  `art_pic_thumb` varchar(255) NOT NULL DEFAULT '' ,
-  `art_pic_slide` varchar(255) NOT NULL DEFAULT '' ,
+  `art_pic` varchar(1024) NOT NULL DEFAULT '' ,
+  `art_pic_thumb` varchar(1024) NOT NULL DEFAULT '' ,
+  `art_pic_slide` varchar(1024) NOT NULL DEFAULT '' ,
   `art_pic_screenshot` text,
   `art_blurb` varchar(255) NOT NULL DEFAULT '' ,
   `art_remarks` varchar(100) NOT NULL DEFAULT '' ,
@@ -298,7 +298,9 @@ CREATE TABLE `mac_collect` (
   `collect_param` varchar(100) NOT NULL DEFAULT '' ,
   `collect_filter` tinyint(1) unsigned NOT NULL DEFAULT '0' ,
   `collect_filter_from` varchar(255) NOT NULL DEFAULT '' ,
+  `collect_filter_year` VARCHAR(255) NOT NULL DEFAULT '' COMMENT '采集时，过滤年份',
   `collect_opt` tinyint(1) unsigned NOT NULL DEFAULT '0' ,
+  `collect_sync_pic_opt` tinyint(1) unsigned NOT NULL DEFAULT '0' COMMENT '同步图片选项，0-跟随全局，1-开启，2-关闭',
   PRIMARY KEY (`collect_id`)
 ) ENGINE=MyISAM AUTO_INCREMENT=1 DEFAULT CHARSET=utf8 ;
 
@@ -470,7 +472,7 @@ CREATE TABLE `mac_role` (
   `role_color` varchar(6) NOT NULL DEFAULT '' ,
   `role_actor` varchar(255) NOT NULL DEFAULT '' ,
   `role_remarks` varchar(100) NOT NULL DEFAULT '',
-  `role_pic` varchar(255) NOT NULL DEFAULT '' ,
+  `role_pic` varchar(1024) NOT NULL DEFAULT '' ,
   `role_sort` smallint(6) unsigned NOT NULL DEFAULT '0' ,
   `role_level` tinyint(1) unsigned NOT NULL DEFAULT '0' ,
   `role_time` int(10) unsigned NOT NULL DEFAULT '0' ,
@@ -520,9 +522,9 @@ CREATE TABLE `mac_topic` (
   `topic_color` varchar(6) NOT NULL DEFAULT '' ,
   `topic_tpl` varchar(30) NOT NULL DEFAULT '' ,
   `topic_type` varchar(255) NOT NULL DEFAULT '' ,
-  `topic_pic` varchar(255) NOT NULL DEFAULT '',
-  `topic_pic_thumb` varchar(255) NOT NULL DEFAULT '',
-  `topic_pic_slide` varchar(255) NOT NULL DEFAULT '',
+  `topic_pic` varchar(1024) NOT NULL DEFAULT '',
+  `topic_pic_thumb` varchar(1024) NOT NULL DEFAULT '',
+  `topic_pic_slide` varchar(1024) NOT NULL DEFAULT '',
   `topic_key` varchar(255) NOT NULL DEFAULT '' ,
   `topic_des` varchar(255) NOT NULL DEFAULT '' ,
   `topic_title` varchar(255) NOT NULL DEFAULT '' ,
@@ -589,7 +591,7 @@ CREATE TABLE `mac_type` (
   `type_union` varchar(255) NOT NULL DEFAULT '',
   `type_extend` text NOT NULL,
   `type_logo`  VARCHAR( 255 )  NOT NULL DEFAULT  '',
-  `type_pic`  VARCHAR( 255 )  NOT NULL DEFAULT  '',
+  `type_pic`  VARCHAR( 1024 )  NOT NULL DEFAULT  '',
   `type_jumpurl`  VARCHAR( 150 )  NOT NULL DEFAULT  '',
   PRIMARY KEY (`type_id`),
   KEY `type_sort` (`type_sort`) USING BTREE,
@@ -694,9 +696,9 @@ CREATE TABLE `mac_vod` (
   `vod_color` varchar(6) NOT NULL DEFAULT '' ,
   `vod_tag` varchar(100) NOT NULL DEFAULT '' ,
   `vod_class` varchar(255) NOT NULL DEFAULT '' ,
-  `vod_pic` varchar(255) NOT NULL DEFAULT '' ,
-  `vod_pic_thumb` varchar(255) NOT NULL DEFAULT '' ,
-  `vod_pic_slide` varchar(255) NOT NULL DEFAULT '' ,
+  `vod_pic` varchar(1024) NOT NULL DEFAULT '' ,
+  `vod_pic_thumb` varchar(1024) NOT NULL DEFAULT '' ,
+  `vod_pic_slide` varchar(1024) NOT NULL DEFAULT '' ,
   `vod_pic_screenshot` text,
   `vod_actor` varchar(255) NOT NULL DEFAULT '' ,
   `vod_director` varchar(255) NOT NULL DEFAULT '' ,
@@ -752,7 +754,7 @@ CREATE TABLE `mac_vod` (
   `vod_pwd_play_url` varchar(255) NOT NULL DEFAULT '' ,
   `vod_pwd_down` varchar(10) NOT NULL DEFAULT '' ,
   `vod_pwd_down_url` varchar(255) NOT NULL DEFAULT '' ,
-  `vod_content` text NOT NULL ,
+  `vod_content` mediumtext NOT NULL ,
   `vod_play_from` varchar(255) NOT NULL DEFAULT '' ,
   `vod_play_server` varchar(255) NOT NULL DEFAULT '' ,
   `vod_play_note` varchar(255) NOT NULL DEFAULT '' ,
@@ -818,7 +820,7 @@ CREATE TABLE `mac_website` (
   `website_lock` tinyint(1) unsigned NOT NULL DEFAULT '0',
   `website_sort` int(10) NOT NULL DEFAULT '0',
   `website_jumpurl` varchar(255) NOT NULL DEFAULT '',
-  `website_pic` varchar(255) NOT NULL DEFAULT '',
+  `website_pic` varchar(1024) NOT NULL DEFAULT '',
   `website_pic_screenshot` text,
   `website_logo` varchar(255) NOT NULL DEFAULT '',
   `website_area` varchar(20) NOT NULL DEFAULT '',
@@ -879,3 +881,22 @@ CREATE TABLE `mac_website` (
 ) ENGINE=MyISAM AUTO_INCREMENT=1 DEFAULT CHARSET=utf8 ;
 
 
+-- ----------------------------
+-- Table structure for mac_vod_search
+-- ----------------------------
+DROP TABLE IF EXISTS `mac_vod_search`;
+CREATE TABLE `mac_vod_search` (
+  `search_key` char(32) CHARACTER SET ascii COLLATE ascii_bin NOT NULL COMMENT '搜索键（关键词md5）',
+  `search_word` varchar(128) CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci NOT NULL COMMENT '搜索关键词',
+  `search_field` varchar(64) CHARACTER SET ascii COLLATE ascii_bin NOT NULL COMMENT '搜索字段名（可有多个，用|分隔）',
+  `search_hit_count` bigint unsigned NOT NULL DEFAULT '0' COMMENT '搜索命中次数',
+  `search_last_hit_time` int unsigned NOT NULL DEFAULT '0' COMMENT '最近命中时间',
+  `search_update_time` int unsigned NOT NULL DEFAULT '0' COMMENT '添加时间',
+  `search_result_count` int unsigned NOT NULL DEFAULT '0' COMMENT '结果Id数量',
+  `search_result_ids` mediumtext CHARACTER SET ascii COLLATE ascii_bin NOT NULL COMMENT '搜索结果Id列表，英文半角逗号分隔',
+  PRIMARY KEY (`search_key`),
+  KEY `search_field` (`search_field`),
+  KEY `search_update_time` (`search_update_time`),
+  KEY `search_hit_count` (`search_hit_count`),
+  KEY `search_last_hit_time` (`search_last_hit_time`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci COMMENT='vod搜索缓存表';

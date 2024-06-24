@@ -26,15 +26,15 @@ class Comment extends Base
 
         return $this->label_fetch('comment/index');
     }
-	
-	public function ajax() {
-		$param = mac_param_url();
+    
+    public function ajax() {
+        $param = mac_param_url();
         $this->assign('param',$param);
         $this->assign('comment',$GLOBALS['config']['comment']);
         return $this->label_fetch('comment/ajax',0,'json');
-	}
+    }
 
-	public function saveData() {
+    public function saveData() {
         $param = input();
 
         if($GLOBALS['config']['comment']['verify'] == 1){
@@ -63,10 +63,9 @@ class Comment extends Base
         }
 
         $param['comment_content']= htmlentities(mac_filter_words($param['comment_content']));
-        $pattern = '/[^\x00-\x80]/';
-        if(!preg_match($pattern,$param['comment_content'])){
-            return ['code'=>1005,'msg'=>lang('index/require_cn')];
-        }
+        // if(!preg_match('/[^\x00-\x80]/',$param['comment_content'])){
+        //     return ['code'=>1005,'msg'=>lang('index/require_cn')];
+        // }
 
         if(!in_array($param['comment_mid'],['1','2','3','8','9','11'])){
             return ['code'=>1006,'msg'=>lang('index/mid_err')];
@@ -78,21 +77,21 @@ class Comment extends Base
         else{
             $param['comment_name'] = cookie('user_name');
             $param['user_id'] = intval(cookie('user_id'));
+            $user_data = model('User')->field('user_nick_name')->where(['user_id' => $param['user_id']])->find();
+            if (!empty($user_data['user_nick_name'])) {
+                $param['comment_name'] = $user_data['user_nick_name'];
+            }
         }
-        $param['comment_name'] = htmlentities($param['comment_name']);
+        $param['comment_name'] = htmlentities(trim($param['comment_name']));
         $param['comment_rid'] = intval($param['comment_rid']);
         $param['comment_pid'] = intval($param['comment_pid']);
         if($GLOBALS['config']['comment']['audit'] ==1){
             $param['comment_status'] = 0;
         }
 
-        $ip = sprintf('%u',ip2long(request()->ip()));
-        if($ip>2147483647){
-            $ip=0;
-        }
-        $param['comment_ip'] = $ip;
+        $param['comment_ip'] = mac_get_ip_long();
 
-		$res = model('Comment')->saveData($param);
+        $res = model('Comment')->saveData($param);
         if($res['code']>1){
             return $res;
         }
@@ -106,7 +105,7 @@ class Comment extends Base
             }
             return $res;
         }
-	}
+    }
 
     public function report()
     {

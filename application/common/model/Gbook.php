@@ -31,6 +31,8 @@ class Gbook extends Base {
         $list = Db::name('Gbook')->where($where)->order($order)->limit($limit_str)->select();
         foreach ($list as $k=>$v){
             $list[$k]['user_portrait'] = mac_get_user_portrait($v['user_id']);
+            $list[$k]['gbook_content'] = mac_restore_htmlfilter($list[$k]['gbook_content']);
+            $list[$k]['gbook_reply'] = mac_restore_htmlfilter($list[$k]['gbook_reply']);
         }
         return ['code'=>1,'msg'=>lang('data_list'),'page'=>$page,'limit'=>$limit,'total'=>$total,'list'=>$list];
     }
@@ -137,6 +139,18 @@ class Gbook extends Base {
             return ['code'=>1001,'msg'=>lang('param_err').'：'.$validate->getError() ];
         }
 
+        // xss过滤
+        $filter_fields = [
+            'gbook_name',
+            'gbook_content',
+            'gbook_reply',
+        ];
+        foreach ($filter_fields as $filter_field) {
+            if (!isset($data[$filter_field])) {
+                continue;
+            }
+            $data[$filter_field] = mac_filter_xss($data[$filter_field]);
+        }
 
         if(!empty($data['gbook_id'])){
             if(!empty($data['gbook_reply'])){

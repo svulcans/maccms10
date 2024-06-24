@@ -30,6 +30,7 @@ class System extends Base
         View::instance()->assign(['code'=>$code,'time'=>$GLOBALS['config']['email']['time']]);
         $title =  View::instance()->display($title);
         $msg =  View::instance()->display($msg);
+        $msg = htmlspecialchars_decode($msg);
         $res = mac_send_mail($to, $title, $msg, $conf);
         if ($res['code']==1) {
             return json(['code' => 1, 'msg' => lang('test_ok')]);
@@ -91,6 +92,8 @@ class System extends Base
 
             $config['app']['search_vod_rule'] = join('|', $config['app']['search_vod_rule']);
             $config['app']['search_art_rule'] = join('|', $config['app']['search_art_rule']);
+            $config['app']['vod_search_optimise'] = join('|', !empty($config['app']['vod_search_optimise']) ? (array)$config['app']['vod_search_optimise'] : []);
+            $config['app']['vod_search_optimise_cache_minutes'] = (int)$config['app']['vod_search_optimise_cache_minutes'];
 
             $config['extra'] = [];
             if(!empty($config['app']['extra_var'])){
@@ -151,6 +154,7 @@ class System extends Base
         if (!isset($config['app']['input_type'])) {
             $config['app']['input_type'] = 1;
         }
+        $config['app']['vod_search_optimise_cache_minutes'] = model('VodSearch')->getResultCacheMinutes($config);
         $this->assign('config', $config);
         $this->assign('title', lang('admin/system/config/title'));
         return $this->fetch('admin@system/config');
@@ -217,9 +221,9 @@ class System extends Base
                 if (strpos($r, '=>') !== false) {
                     $a = explode('=>', $r);
                     $rule = [];
-                    if (strpos($a, ':id') !== false) {
+//                    if (strpos($a, ':id') !== false) {
                         //$rule['id'] = '\w+';
-                    }
+//                    }
                     $route[trim($a[0])] = [trim($a[1]), [], $rule];
                 }
             }
@@ -617,6 +621,9 @@ class System extends Base
 
             $config_new['collect']['vod']['namewords'] = mac_replace_text($config_new['collect']['vod']['namewords'], 2);
             $config_new['collect']['vod']['thesaurus'] = mac_replace_text($config_new['collect']['vod']['thesaurus'], 2);
+            $config_new['collect']['vod']['playerwords'] = mac_replace_text($config_new['collect']['vod']['playerwords'], 2);
+            $config_new['collect']['vod']['areawords'] = mac_replace_text($config_new['collect']['vod']['areawords'], 2);
+            $config_new['collect']['vod']['langwords'] = mac_replace_text($config_new['collect']['vod']['langwords'], 2);
             $config_new['collect']['vod']['words'] = mac_replace_text($config_new['collect']['vod']['words'], 2);
             $config_new['collect']['art']['thesaurus'] = mac_replace_text($config_new['collect']['art']['thesaurus'], 2);
             $config_new['collect']['art']['words'] = mac_replace_text($config_new['collect']['art']['words'], 2);
@@ -721,5 +728,17 @@ class System extends Base
         return $this->fetch('admin@system/configseo');
     }
 
+    public function configlang(){
+        $param = input();
+        $config_new['app']['lang'] = $param['lang'];
+        $config_old = config('maccms');
+        $config_new = array_merge($config_old, $config_new);
+
+        $res = mac_arr2file(APP_PATH . 'extra/maccms.php', $config_new);
+        if ($res === false) {
+            return $this->error(lang('save_err'));
+        }
+        return json(['code' => 1, 'msg' => 'ok']);
+    }
 
 }

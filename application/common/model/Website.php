@@ -502,6 +502,30 @@ class Website extends Base {
         unset($data['uptime']);
         unset($data['uptag']);
 
+        // xss过滤
+        $filter_fields = [
+            'website_name',
+            'website_sub',
+            'website_en',
+            'website_color',
+            'website_jumpurl',
+            'website_pic',
+            'website_logo',
+            'website_area',
+            'website_lang',
+            'website_tag',
+            'website_class',
+            'website_remarks',
+            'website_tpl',
+            'website_blurb',
+        ];
+        foreach ($filter_fields as $filter_field) {
+            if (!isset($data[$filter_field])) {
+                continue;
+            }
+            $data[$filter_field] = mac_filter_xss($data[$filter_field]);
+        }
+
         if(!empty($data['website_id'])){
             $where=[];
             $where['website_id'] = ['eq',$data['website_id']];
@@ -587,11 +611,7 @@ class Website extends Base {
 
     public function visit($param)
     {
-        $ip = sprintf('%u', ip2long(request()->ip()));
-        if ($ip > 2147483647) {
-            $ip = 0;
-        }
-
+        $ip = mac_get_ip_long();
         $max_cc = $GLOBALS['config']['website']['refer_visit_num'];
         if(empty($max_cc)){
             $max_cc=1;

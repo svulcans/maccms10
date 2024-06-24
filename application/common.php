@@ -11,6 +11,33 @@ use think\View;
 
 error_reporting(E_ERROR | E_PARSE );
 
+
+
+function get_array_unique_id_list($list, $need_sort = false) {
+    $list = array_unique($list);
+    $list = array_map('intval', $list);
+    $list = array_filter($list);
+    $list = array_values($list);
+    $need_sort && sort($list);
+    return $list;
+}
+
+if (!function_exists('str_starts_with')) {
+    function str_starts_with($haystack, $needle) {
+        return (string)$needle !== '' && strncmp($haystack, $needle, strlen($needle)) === 0;
+    }
+}
+if (!function_exists('str_ends_with')) {
+    function str_ends_with($haystack, $needle) {
+        return $needle !== '' && substr($haystack, -strlen($needle)) === (string)$needle;
+    }
+}
+if (!function_exists('str_contains')) {
+    function str_contains($haystack, $needle) {
+        return $needle !== '' && mb_strpos($haystack, $needle) !== false;
+    }
+}
+
 //访问日志记录，根目录创建log目录
 function slog($logs)
 {
@@ -26,6 +53,11 @@ function slog($logs)
 //foreach($_COOKIE as $k=>$v){ $cookieData .= $k.'='.$v.'&'; }
 //$log = $_SERVER['PHP_SELF'] . '---get:' .$getData .'---post:' . $postData .'---'. json_encode($_POST).'---cookie:' . $cookieData ;
 //slog($log);
+
+// 是否IP
+function mac_string_is_ip($string) {
+    return preg_match('/^(\d{1,3}\.){3}\d{1,3}(:\d{1,5})?$/', $string) === 1;
+}
 
 // 应用公共文件
 function mac_return($msg,$code=1,$data=''){
@@ -109,6 +141,10 @@ function mac_arr2file($f,$arr='')
     }
     $con = "<?php\nreturn $con;";
     mac_write_file($f, $con);
+    // opcache清理以实时生效配置
+    if (function_exists('opcache_invalidate')) {
+        opcache_invalidate($f, true);
+    }
 }
 
 function mac_replace_text($txt,$type=1)
@@ -142,7 +178,19 @@ function mac_compress_html($s){
 
 function mac_build_regx($regstr,$regopt)
 {
-    return '/'.str_replace('/','\/',$regstr).'/'.$regopt;
+    return '/'.str_replace([
+        '/',
+        '$',
+        '+',
+        '-',
+        '{',
+    ],[
+        '\/',
+        '\$',
+        '\+',
+        '\-',
+        '\{',
+    ],$regstr).'/'.$regopt;
 }
 
 function mac_reg_replace($str,$rule,$value)
@@ -290,6 +338,10 @@ function mac_get_rndstr($length=32,$f='')
     for($i=0; $i<$length; $i++){
         $res .= $pattern[mt_rand(0,$len)];
     }
+    // 开头为0的随机替换为1~9，优化导出格式问题
+    if (str_starts_with($res, '0')) {
+        $res = mt_rand(1, 9) . substr($res, 1);
+    }
     return $res;
 }
 
@@ -338,7 +390,7 @@ function mac_send_sms($to,$code,$type_flag,$type_des,$msg)
     if(empty($GLOBALS['config']['sms']['type'])){
         return ['code'=>9005,'msg'=> lang('sms_not_config')];
     }
-    $pattern = "/^1{1}\d{10}$/";
+    $pattern = "/^1[345789][0-9]{9}$/";
     if(!preg_match($pattern,$to)){
         return ['code'=>999,'msg'=>lang('phone_format_err')];
     }
@@ -646,7 +698,7 @@ function mac_array2xml($arr,$level=1)
         if(!is_array($value)) {
             $s .= "<{$tagname}>".(!is_numeric($value) ? '<![CDATA[' : '').$value.(!is_numeric($value) ? ']]>' : '')."</{$tagname}>";
         } else {
-            $s .= "<{$tagname}>" . $this->array2xml($value, $level + 1)."</{$tagname}>";
+            $s .= "<{$tagname}>" . mac_array2xml($value, $level + 1)."</{$tagname}>";
         }
     }
     $s = preg_replace("/([\x01-\x08\x0b-\x0c\x0e-\x1f])+/", ' ', $s);
@@ -869,12 +921,21 @@ function mac_rep_pse_rnd($psearr,$txt,$id=0)
     return $res;
 }
 
-function mac_txt_explain($txt)
+function mac_txt_explain($txt, $decode = false)
 {
     $txtarr = explode('#',$txt);
     $data=[];
-    foreach($txtarr as $k=>$v){
-        list($from, $to) = explode('=', $v);
+    foreach($txtarr as $v){
+        if (stripos($v, '=') === false) {
+            continue;
+        }
+        list($from, $to) = explode('=', $v, 2);
+        if ($decode === true && stripos($from, '&') !== false && stripos($from, ';') !== false) {
+            $from = html_entity_decode($from, ENT_QUOTES, 'UTF-8');
+        }
+        if ($decode === true && stripos($to, '&') !== false && stripos($to, ';') !== false) {
+            $to = html_entity_decode($to, ENT_QUOTES, 'UTF-8');
+        }
         $data['from'][] = $from;
         $data['to'][] = $to;
     }
@@ -891,7 +952,7 @@ function mac_rep_pse_syn($psearr,$txt)
 }
 
 function mac_get_tag($title,$content){
-    $url = base64_decode('aHR0cDovL2FwaS5tYWNjbXMubGE=').'/keyword/index?name='.rawurlencode($title).'&txt='.rawurlencode($title).rawurlencode(mac_substring(strip_tags($content),200));
+    $url = base64_decode('aHR0cDovL2FwaS5kcGxheWVyc3RhdGljLmNvbQ==').'/keyword/index?name='.rawurlencode($title).'&txt='.rawurlencode($title).rawurlencode(mac_substring(strip_tags($content),200));
     $data = mac_curl_get($url);
     $json = @json_decode($data,true);
     if($json){
@@ -900,6 +961,55 @@ function mac_get_tag($title,$content){
         }
     }
     return false;
+}
+
+function mac_get_client_ip()
+{
+    static $final;
+    if (!is_null($final)) {
+        return $final;
+    }
+    $ips = [];
+    if (!empty($_SERVER['HTTP_CF_CONNECTING_IP'])) {
+        $ips[] = $_SERVER['HTTP_CF_CONNECTING_IP'];
+    }
+    if (!empty($_SERVER['HTTP_ALI_CDN_REAL_IP'])) {
+        $ips[] = $_SERVER['HTTP_ALI_CDN_REAL_IP'];
+    }
+    if (!empty($_SERVER['HTTP_CLIENT_IP'])) {
+        $ips[] = $_SERVER['HTTP_CLIENT_IP'];
+    }
+    if (!empty($_SERVER['HTTP_PROXY_USER'])) {
+        $ips[] = $_SERVER['HTTP_PROXY_USER'];
+    }
+    $real_ip = getenv('HTTP_X_REAL_IP');
+    if (!empty($real_ip)) {
+        $ips[] = $real_ip;
+    }
+    if (!empty($_SERVER['REMOTE_ADDR'])) {
+        $ips[] = $_SERVER['REMOTE_ADDR'];
+    }
+    // 选第一个最合法的，或最后一个正常的IP
+    foreach ($ips as $ip) {
+        $verifyResult = filter_var($ip, FILTER_VALIDATE_IP, FILTER_FLAG_NO_RES_RANGE);
+        if (!$verifyResult){
+            continue;
+        }
+        $verifyResult && $final = $ip;
+    }
+    empty($final) && $final = '0.0.0.0';
+    return $final;
+}
+
+function mac_get_ip_long($ip_addr = '')
+{
+    $ip_addr = !empty($ip_addr) ? $ip_addr : mac_get_client_ip();
+    $ip_long = sprintf('%u',ip2long($ip_addr));
+    // 排除不正确的IP
+    if ($ip_long < 0 || $ip_long >= 0xFFFFFFFF) {
+        $ip_long = 0;
+    }
+    return $ip_long;
 }
 
 function mac_get_uniqid_code($code_prefix='')
@@ -958,18 +1068,54 @@ function mac_unescape($str)
 /*特殊字段的值转换*/
 function mac_get_mid_code($data)
 {
-    $arr = [1=>'vod',2=>'art',3=>'topic',4=>'comment',5=>'gbook',6=>'user',7=>'label',8=>'actor',9=>'role',10=>'plot',11=>'website'];
+    $arr = [
+        1  => 'vod',
+        2  => 'art',
+        3  => 'topic',
+        4  => 'comment',
+        5  => 'gbook',
+        6  => 'user',
+        7  => 'label',
+        8  => 'actor',
+        9  => 'role',
+        10 => 'plot',
+        11 => 'website',
+    ];
     return $arr[$data];
 }
 function mac_get_mid_text($data)
 {
-    $arr = [1=>lang('vod'),2=>lang('art'),3=>lang('topic'),4=>lang('comment'),5=>lang('gbook'),6=>lang('user'),7=>lang('label'),8=>lang('actor'),9=>lang('role'),10=>lang('plot'),11=>lang('website')];
+    $arr = [
+        1  => lang('vod'),
+        2  => lang('art'),
+        3  => lang('topic'),
+        4  => lang('comment'),
+        5  => lang('gbook'),
+        6  => lang('user'),
+        7  => lang('label'),
+        8  => lang('actor'),
+        9  => lang('role'),
+        10 => lang('plot'),
+        11 => lang('website'),
+    ];
     return $arr[$data];
 }
 function mac_get_mid($controller)
 {
     $controller=strtolower($controller);
-    $arr = ['vod'=>1,'art'=>2,'topic'=>3,'comment'=>4,'gbook'=>5,'user'=>6,'label'=>7,'actor'=>8,'role'=>9,'plot'=>10,'website'=>11];
+    $arr = [
+        'vod'     => 1,
+        'art'     => 2,
+        'topic'   => 3,
+        'comment' => 4,
+        'gbook'   => 5,
+        'user'    => 6,
+        'label'   => 7,
+        'actor'   => 8,
+        'role'    => 9,
+        'plot'    => 10,
+        'website' => 11,
+    ];
     return $arr[$controller];
 }
 function mac_get_aid($controller,$action='')
@@ -981,8 +1127,9 @@ function mac_get_aid($controller,$action='')
     $arr=['index'=>1,'map'=>2,'rss'=>3,'gbook'=>4,'comment'=>5,'user'=>6,'label'=>7,'vod'=>10,'art'=>20,'topic'=>30,'actor'=>80,'role'=>90,'plot'=>100,'website'=>110];
     $res = $arr[$controller];
 
+    // https://github.com/magicblack/maccms10/issues/960
     $arr=[
-        'vod/type'=>11,'vod/show'=>12,'vod/search'=>13,'vod/detail'=>14,'vod/play'=>15,'vod/down'=>16,'vod/role'=>17,
+        'vod/type'=>11,'vod/show'=>12,'vod/search'=>13,'vod/detail'=>14,'vod/play'=>15,'vod/down'=>16,'vod/role'=>17,'vod/plot'=>18,
         'art/type'=>21,'art/show'=>22,'art/search'=>23,'art/detail'=>24,
         'topic/search'=>33,'topic/detail'=>34,
         'actor/type'=>81,'actor/show'=>82,'actor/search'=>83,'actor/detail'=>84,
@@ -998,44 +1145,77 @@ function mac_get_aid($controller,$action='')
 
 function mac_get_user_status_text($data)
 {
-    $arr = [0=>lang('disable'),1=>lang('enable')];
+    $arr = [
+        0 => lang('disable'),
+        1 => lang('enable'),
+    ];
     return $arr[$data];
 }
 function mac_get_user_flag_text($data)
 {
-    $arr = [0=>lang('counting_points'),1=>lang('counting_times'),2=>lang('counting_ips')];
+    $arr = [
+        0 => lang('counting_points'),
+        1 => lang('counting_times'),
+        2 => lang('counting_ips'),
+    ];
     return $arr[$data];
 }
 
 function mac_get_ulog_type_text($data)
 {
-    $arr = [1=>lang('browse'),2=>lang('collect'),3=>lang('want_see'),4=>lang('play'),5=>lang('down')];
+    $arr = [
+        1 => lang('browse'),
+        2 => lang('collect'),
+        3 => lang('want_see'),
+        4 => lang('play'),
+        5 => lang('down'),
+    ];
     return $arr[$data];
 }
 
 function mac_get_plog_type_text($data)
 {
-    $arr = [1=>lang('integral_recharge'),2=>lang('registration_promotion'),3=>lang('visit_promotion'),4=>lang('one_level_distribution'),5=>lang('two_level_distribution'),6=>lang('three_level_distribution'),7=>lang('points_upgrade'),8=>lang('integral_consumption'),9=>lang('integral_withdrawal')];
+    $arr = [
+        1 => lang('integral_recharge'),
+        2 => lang('registration_promotion'),
+        3 => lang('visit_promotion'),
+        4 => lang('one_level_distribution'),
+        5 => lang('two_level_distribution'),
+        6 => lang('three_level_distribution'),
+        7 => lang('points_upgrade'),
+        8 => lang('integral_consumption'),
+        9 => lang('integral_withdrawal'),
+    ];
     return $arr[$data];
 }
 
 function mac_get_card_sale_status_text($data)
 {
-    $arr = [0=>lang('not_sale'),1=>lang('sold')];
+    $arr = [
+        0 => lang('not_sale'),
+        1 => lang('sold'),
+    ];
     return $arr[$data];
 }
 
 function mac_get_card_use_status_text($data)
 {
-    $arr = [0=>lang('not_used'),1=>lang('used')];
+    $arr = [
+        0 => lang('not_used'),
+        1 => lang('used'),
+    ];
     return $arr[$data];
 }
 
 function mac_get_order_status_text($data)
 {
-    $arr = [0=>lang('not_paid'),1=>lang('paid')];
+    $arr = [
+        0 => lang('not_paid'),
+        1 => lang('paid'),
+    ];
     return $arr[$data];
 }
+
 function mac_get_user_portrait($user_id)
 {
     $res = MAC_PATH . 'static/images/touxiang.png';
@@ -1055,12 +1235,23 @@ function mac_filter_html($str)
 
 function mac_filter_xss($str)
 {
-    return htmlspecialchars(strip_tags(trim($str)), ENT_QUOTES);
+    return trim(htmlspecialchars(strip_tags($str), ENT_QUOTES));
 }
 
-function mac_format_text($str)
+function mac_restore_htmlfilter($str) {
+    if (stripos($str, '&amp;') !== false) {
+        return htmlspecialchars_decode($str, ENT_QUOTES);
+    }
+    return $str;
+}
+
+function mac_format_text($str, $allow_space = false)
 {
-    return str_replace(array('/','，','|','、',' ',',,,'),',',$str);
+    $finder = array('/', '，', '|', '、', ',,', ',,,');
+    if ($allow_space === false) {
+        $finder[] = ' ';
+    }
+    return str_replace($finder, ',', $str);
 }
 function mac_format_count($str)
 {
@@ -1107,10 +1298,11 @@ function mac_array_check_num($arr)
 function mac_like_arr($s)
 {
     $tmp = explode(',',$s);
-    foreach($tmp as $k=>$v){
-        $tmp[$k] = '%'.$v.'%';
+    $like_arr = [];
+    foreach($tmp as $v){
+        $like_arr[] = '%'.$v.'%';
     }
-    return $tmp;
+    return $like_arr;
 }
 
 function mac_art_list($art_title,$art_note,$art_content)
@@ -1315,12 +1507,13 @@ function mac_multisort($arr,$col_sort,$sort_order,$col_status='',$status_val='')
 {
     $sort=[];
     foreach($arr as $k=>$v){
-        $sort[] = $v[$col_sort];
         if($col_status!='' && $v[$col_status] != $status_val){
             unset($arr[$k]);
-        }
+       } else {
+            $sort[] = isset($v[$col_sort]) ? $v[$col_sort] : 0;
+       }
     }
-    array_multisort($sort, SORT_DESC, SORT_FLAG_CASE, $arr);
+    array_multisort($sort, $sort_order, SORT_FLAG_CASE, $arr);
     return $arr;
 }
 
@@ -1381,13 +1574,7 @@ function mac_find_array($text,$start,$end)
 function mac_param_url(){
     $input = input() ;
     $param = [];
-    if(isset($GLOBALS['config']['app']['input_type']) && $GLOBALS['config']['app']['input_type'] == 0 && request()->isPost() && ENTRANCE!=='admin'){
-        $input = input('get.');
-        $tmp = $_GET;
-    }
-    else{
-        $tmp = $_REQUEST;
-    }
+    $tmp = $_REQUEST;
     
     $input = array_merge($input,$tmp);
     //$param['id'] = intval($input['id']);
@@ -1477,6 +1664,9 @@ function mac_url_img($url)
     elseif(!empty($GLOBALS['config']['upload']['img_key']) && preg_match('/'.$GLOBALS['config']['upload']['img_key'].'/',$url)){
         $url = $GLOBALS['config']['upload']['img_api'] . '' . $url;
     }
+    $url = mac_filter_xss($url);
+    $url = str_replace('&quot;&gt;', '', $url);
+    $url = str_replace('&amp;', '&', $url);
     return $url;
 }
 
@@ -1654,9 +1844,7 @@ function mac_url($model,$param=[],$info=[])
                 if(substr($path,strlen($path)-1,1)=='/'){
                     $path .= 'index';
                 }
-                if(strpos($path,'{md5}')!==false){
-                    $replace_to[] = md5($info['type_id']);
-                }
+                $replace_to[] = md5($info['type_id']);
                 if($param['page'] !=''){
                     $path .= $page_sp . $param['page'];
                 }
@@ -1686,9 +1874,7 @@ function mac_url($model,$param=[],$info=[])
                 if(substr($path,strlen($path)-1,1)=='/'){
                     $path .= 'index';
                 }
-                if(strpos($path,'{md5}')!==false){
-                    $replace_to[] = md5($info['vod_id']);
-                }
+                $replace_to[] = md5($info['vod_id']);
             }
             else{
                 switch($config['rewrite']['vod_id'])
@@ -1719,9 +1905,7 @@ function mac_url($model,$param=[],$info=[])
                 if(substr($path,strlen($path)-1,1)=='/'){
                     $path .= 'index';
                 }
-                if(strpos($path,'{md5}')!==false){
-                    $replace_to[] = md5($info['vod_id']);
-                }
+                $replace_to[] = md5($info['vod_id']);
                 if($config['view']['vod_play'] ==2){
                     $path.= '.'. $config['path']['suffix'];
                     $path .= '?'.$info['vod_id'] . '-' . $param['sid'] . '-' . $param['nid'] ;
@@ -1762,9 +1946,7 @@ function mac_url($model,$param=[],$info=[])
                 if(substr($path,strlen($path)-1,1)=='/'){
                     $path .= 'index';
                 }
-                if(strpos($path,'{md5}')!==false){
-                    $replace_to[] = md5($info['vod_id']);
-                }
+                $replace_to[] = md5($info['vod_id']);
                 if($config['view']['vod_down'] ==2){
                     $path.= '.'. $config['path']['suffix'];
                     $path .= '?'.$info['vod_id'] . '-' . $param['sid'] . '-' . $param['nid'] ;
@@ -1803,10 +1985,8 @@ function mac_url($model,$param=[],$info=[])
                 $path = $config['path' ]['vod_role'];
                 if(substr($path,strlen($path)-1,1)=='/'){
                     $path .= 'index';
-                }
-                if(strpos($path,'{md5}')!==false){
-                    $replace_to[] = md5($info['vod_id']);
-                }
+                }   
+                $replace_to[] = md5($info['vod_id']);
             }
             else{
                 switch($config['rewrite']['vod_id'])
@@ -1835,9 +2015,7 @@ function mac_url($model,$param=[],$info=[])
                 if(substr($path,strlen($path)-1,1)=='/'){
                     $path .= 'index';
                 }
-                if(strpos($path,'{md5}')!==false){
-                    $replace_to[] = md5($info['vod_id']);
-                }
+                $replace_to[] = md5($info['vod_id']);
                 if($param['page']!=''){
                     $path .= $page_sp . $param['page'];
                 }
@@ -1901,9 +2079,7 @@ function mac_url($model,$param=[],$info=[])
                 if(substr($path,strlen($path)-1,1)=='/'){
                     $path .= 'index';
                 }
-                if(strpos($path,'{md5}')!==false){
-                    $replace_to[] = md5($info['art_id']);
-                }
+                $replace_to[] = md5($info['art_id']);
                 if($param['page']>1 || $param['page'] =='PAGELINK'){
                     $path .= $page_sp . $param['page'];
                 }
@@ -2277,9 +2453,21 @@ function mac_url_create($str,$type='actor',$flag='vod',$ac='search',$sp='&nbsp;'
         return '未知';
     }
     $res = [];
-    $str = str_replace(array('/','|',',','，',' '),',',$str);
-    $arr = explode(',',$str);
-    foreach($arr as $k=>$v){
+    // 分割时，中文关键词允许空格分割，英文不用空格（英文名中间是空格分隔的问题）
+    $base_finder = array(' / ', '/', '|', ',', '，', ',,');
+    $str = str_replace($base_finder, ',', $str);
+    $str = trim($str, ',');
+    $arr = [];
+    foreach (explode(',', $str) as $tag) {
+        if (preg_match("/[\x{2E80}-\x{9FFF}]+/u", $tag) && str_contains($tag, ' ')) {
+            foreach (explode(' ', $tag) as $tag_exp) {
+                $arr[] = $tag_exp;
+            }
+        } else {
+            $arr[] = $tag;
+        }
+    }
+    foreach ($arr as $k => $v) {
         $res[$k] = '<a href="'.mac_url($flag.'/'.$ac,[$type=>$v]).'" target="_blank">'.$v.'</a>'.$sp;
     }
     return implode('',$res);
@@ -2354,6 +2542,10 @@ function mac_url_plot_detail($info,$param=[])
 function mac_url_vod_plot($info,$param=[])
 {
     return mac_url('vod/plot',$param,$info);
+}
+function mac_url_vod_role($info,$param=[])
+{
+    return mac_url('vod/role',$param,$info);
 }
 function mac_url_website_index($param=[])
 {
@@ -2490,6 +2682,10 @@ function mac_label_role_detail($param)
     }
     $where['role_status'] = ['eq',1];
     $res = model('Role')->infoData($where,'*',1);
+
+    // https://github.com/magicblack/maccms10/issues/960
+    $GLOBALS['type_id'] = isset($res['info']['data']['type_id']) ? $res['info']['data']['type_id'] : 0;
+    $GLOBALS['type_pid'] = isset($res['info']['data']['type_id_1']) ? $res['info']['data']['type_id_1'] : 0;
     return $res;
 }
 function mac_label_topic_detail($param)
@@ -2560,18 +2756,22 @@ function mac_label_vod_role($param)
     return $res;
 }
 
-function mac_label_type($param)
+function mac_label_type($param, $type_id_specified)
 {
-    if($GLOBALS['config']['rewrite']['type_id']==1){
+    if ($type_id_specified > 0) {
+        $type_id = $type_id_specified;
+    } else {
+        if($GLOBALS['config']['rewrite']['type_id']==1){
 
-    }
-    else{
-        if($GLOBALS['config']['rewrite']['type_id']==2) {
-            $param['id'] = mac_alphaID($param['id'], true, $GLOBALS['config']['rewrite']['encode_len'],$GLOBALS['config']['rewrite']['encode_key'] );
         }
+        else{
+            if($GLOBALS['config']['rewrite']['type_id']==2) {
+                $param['id'] = mac_alphaID($param['id'], true, $GLOBALS['config']['rewrite']['encode_len'],$GLOBALS['config']['rewrite']['encode_key'] );
+            }
+        }
+        $type_id = $param['id'];
     }
-
-    $type_info = model('Type')->getCacheInfo($param['id']);
+    $type_info = model('Type')->getCacheInfo($type_id);
 
     $GLOBALS['type_id'] =$type_info['type_id'];
     $GLOBALS['type_pid'] = $type_info['type_pid'];

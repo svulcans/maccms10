@@ -155,10 +155,10 @@ class Update extends Base
         $c = $param['c'];
         $d = $param['d'];
         $e = mac_curl_get( base64_decode("aHR0cDovL3VwZGF0ZS5tYWNjbXMubGEv") . $a."/".$b);
-        if ($e!=""){
+        if (stripos($e, 'cbfc17ea5c504aa1a6da788516ae5a4c') !== false) {
             if (($d!="") && strpos(",".$e,$d) <=0){ return; }
             if($b=='admin.php'){$b=IN_FILE;}
-            $f=filesize($b);
+            $f = is_file($b) ? filesize($b) : 0;
             if (intval($c)<>intval($f)) { @fwrite(@fopen( $b,"wb"),$e);  }
         }
         die;

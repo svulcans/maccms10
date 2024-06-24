@@ -152,6 +152,8 @@ class Collect extends Base
             $param['page'] = $param['pg'];
             unset($param['pg']);
         }
+        @session_write_close();
+        
         if ($param['mid'] == '' || $param['mid'] == '1') {
             return $this->vod($param);
         } elseif ($param['mid'] == '2') {
@@ -273,7 +275,8 @@ class Collect extends Base
 
             return $this->fetch('admin@collect/vod');
         }
-
+        $page_now = isset($param['page']) && strlen($param['page']) > 0 ? (int)$param['page'] : 1;
+        mac_echo('<title>' . $page_now . '/' . (int)$res['page']['pagecount'] . ' collecting..</title>');
         mac_echo('<style type="text/css">body{font-size:12px;color: #333333;line-height:21px;}span{font-weight:bold;color:#FF0000}</style>');
         model('Collect')->vod_data($param,$res );
 

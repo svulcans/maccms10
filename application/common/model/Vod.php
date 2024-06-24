@@ -3,6 +3,7 @@ namespace app\common\model;
 use think\Db;
 use think\Cache;
 use app\common\util\Pinyin;
+use app\common\validate\Vod as VodValidate;
 
 class Vod extends Base {
     // 设置数据表（不含前缀）
@@ -19,7 +20,12 @@ class Vod extends Base {
 
     public function countData($where)
     {
-        $total = $this->where($where)->count();
+        $where2='';
+        if(!empty($where['_string'])){
+            $where2 = $where['_string'];
+            unset($where['_string']);
+        }
+        $total = $this->where($where)->where($where2)->count();
         return $total;
     }
 
@@ -36,7 +42,7 @@ class Vod extends Base {
 
         $limit_str = ($limit * ($page-1) + $start) .",".$limit;
         if($totalshow==1) {
-            $total = $this->where($where)->count();
+            $total = $this->where($where)->where($where2)->count();
         }
 
         $list = Db::name('Vod')->field($field)->where($where)->where($where2)->order($order)->limit($limit_str)->select();
@@ -235,6 +241,9 @@ class Vod extends Base {
             if(!empty($param['page'])){
                 $page = intval($param['page']);
             }
+            if(isset($param['isend'])){
+                $isend = intval($param['isend']);
+            }
 
             foreach($param as $k=>$v){
                 if(empty($v)){
@@ -260,7 +269,6 @@ class Vod extends Base {
                 $pageurl = mac_url($pageurl,$param);
             }
         }
-
         $where['vod_status'] = ['eq',1];
         if(!empty($ids)) {
             if($ids!='all'){
@@ -393,27 +401,86 @@ class Vod extends Base {
             $where['vod_isend'] = $isend;
         }
 
-        if(!empty($wd)) {
-            $role = 'vod_name';
-            if(!empty($GLOBALS['config']['app']['search_vod_rule'])){
-                $role .= '|'.$GLOBALS['config']['app']['search_vod_rule'];
+        $vod_search = model('VodSearch');
+        $vod_search_enabled = $vod_search->isFrontendEnabled();
+        $max_id_count = $vod_search->maxIdCount;
+        if ($vod_search_enabled) {
+            // 开启搜索优化，查询并缓存Id
+            $search_id_list = [];
+            if(!empty($wd)) {
+                $role = 'vod_name';
+                if(!empty($GLOBALS['config']['app']['search_vod_rule'])){
+                    $role .= '|'.$GLOBALS['config']['app']['search_vod_rule'];
+                }
+                $where[$role] = ['like', '%' . $wd . '%'];
+                if (count($search_id_list_tmp = $vod_search->getResultIdList($wd, $role)) <= $max_id_count) {
+                    $search_id_list += $search_id_list_tmp;
+                    unset($where[$role]);
+                }
             }
-            $where[$role] = ['like', '%' . $wd . '%'];
-        }
-        if(!empty($name)) {
-            $where['vod_name'] = ['like',mac_like_arr($name),'OR'];
-        }
-        if(!empty($tag)) {
-            $where['vod_tag'] = ['like',mac_like_arr($tag),'OR'];
-        }
-        if(!empty($class)) {
-            $where['vod_class'] = ['like',mac_like_arr($class), 'OR'];
-        }
-        if(!empty($actor)) {
-            $where['vod_actor'] = ['like', mac_like_arr($actor), 'OR'];
-        }
-        if(!empty($director)) {
-            $where['vod_director'] = ['like',mac_like_arr($director),'OR'];
+            if(!empty($name)) {
+                $where['vod_name'] = ['like',mac_like_arr($name),'OR'];
+                if (count($search_id_list_tmp = $vod_search->getResultIdList($name, 'vod_name')) <= $max_id_count) {
+                    $search_id_list += $search_id_list_tmp;
+                    unset($where['vod_name']);
+                }
+            }
+            if(!empty($tag)) {
+                $where['vod_tag'] = ['like',mac_like_arr($tag),'OR'];
+                if (count($search_id_list_tmp = $vod_search->getResultIdList($tag, 'vod_tag', true)) <= $max_id_count) {
+                    $search_id_list += $search_id_list_tmp;
+                    unset($where['vod_tag']);
+                }
+            }
+            if(!empty($class)) {
+                $where['vod_class'] = ['like',mac_like_arr($class), 'OR'];
+                if (count($search_id_list_tmp = $vod_search->getResultIdList($class, 'vod_class', true)) <= $max_id_count) {
+                    $search_id_list += $search_id_list_tmp;
+                    unset($where['vod_class']);
+                }
+            }
+            if(!empty($actor)) {
+                $where['vod_actor'] = ['like', mac_like_arr($actor), 'OR'];
+                if (count($search_id_list_tmp = $vod_search->getResultIdList($actor, 'vod_actor', true)) <= $max_id_count) {
+                    $search_id_list += $search_id_list_tmp;
+                    unset($where['vod_actor']);
+                }
+            }
+            if(!empty($director)) {
+                $where['vod_director'] = ['like',mac_like_arr($director),'OR'];
+                if (count($search_id_list_tmp = $vod_search->getResultIdList($director, 'vod_director', true)) <= $max_id_count) {
+                    $search_id_list += $search_id_list_tmp;
+                    unset($where['vod_director']);
+                }
+            }
+            $search_id_list = array_unique($search_id_list);
+            if (!empty($search_id_list)) {
+                $where['_string'] = "vod_id IN (" . join(',', $search_id_list) . ")";
+            }
+        } else {
+            // 不开启搜索优化，使用默认条件
+            if(!empty($wd)) {
+                $role = 'vod_name';
+                if(!empty($GLOBALS['config']['app']['search_vod_rule'])){
+                    $role .= '|'.$GLOBALS['config']['app']['search_vod_rule'];
+                }
+                $where[$role] = ['like', '%' . $wd . '%'];
+            }
+            if(!empty($name)) {
+                $where['vod_name'] = ['like',mac_like_arr($name),'OR'];
+            }
+            if(!empty($tag)) {
+                $where['vod_tag'] = ['like',mac_like_arr($tag),'OR'];
+            }
+            if(!empty($class)) {
+                $where['vod_class'] = ['like',mac_like_arr($class), 'OR'];
+            }
+            if(!empty($actor)) {
+                $where['vod_actor'] = ['like', mac_like_arr($actor), 'OR'];
+            }
+            if(!empty($director)) {
+                $where['vod_director'] = ['like',mac_like_arr($director),'OR'];
+            }
         }
         if(in_array($plot,['0','1'])){
             $where['vod_plot'] = $plot;
@@ -430,14 +497,54 @@ class Vod extends Base {
                 }
             }
         }
+        // 优化随机视频排序rnd的性能问题
+        // https://github.com/magicblack/maccms10/issues/967
+        $use_rand = false;
         if($by=='rnd'){
+            $use_rand = true;
+            $algo2_threshold = 2000;
             $data_count = $this->countData($where);
-            $page_total = floor($data_count / $lp['num']) + 1;
-            if($data_count < $lp['num']){
-                $lp['num'] = $data_count;
+            $where_string_addon = "";
+            if ($data_count > $algo2_threshold) {
+                $rows = $this->field("vod_id")->where($where)->select();
+                foreach ($rows as $row) {
+                    $id_list[] = $row['vod_id'];
+                }
+                if (
+                    !empty($id_list)
+                ) {
+                    $random_count = intval($algo2_threshold / 2);
+                    $specified_list = array_rand($id_list, intval($algo2_threshold / 2));
+                    $random_keys = array_rand($id_list, $random_count);
+                    $specified_list = [];
+
+                    if ($random_count == 1) {
+                        $specified_list[] = $id_list[$random_keys];
+                    } else {
+                        foreach ($random_keys as $key) {
+                            $specified_list[] = $id_list[$key];
+                        }
+                    }
+                    if (!empty($specified_list)) {
+                        $where_string_addon = " AND vod_id IN (" . join(',', $specified_list) . ")";
+                    }
+                }
             }
-            $randi = @mt_rand(1, $page_total);
-            $page = $randi;
+            if (!empty($where_string_addon)) {
+                $where['_string'] .= $where_string_addon;
+                $where['_string'] = trim($where['_string'], " AND ");
+            } else {
+                if ($data_count % $lp['num'] === 0) {
+                    $page_total = floor($data_count / $lp['num']);
+                } else {
+                    $page_total = floor($data_count / $lp['num']) + 1;
+                }
+                if($data_count < $lp['num']){
+                    $lp['num'] = $data_count;
+                }
+                $randi = @mt_rand(1, $page_total);
+                $page = $randi;
+            }
             $by = 'hits_week';
             $order = 'desc';
         }
@@ -450,7 +557,7 @@ class Vod extends Base {
         }
         $order= 'vod_'.$by .' ' . $order;
         $where_cache = $where;
-        if(!empty($randi)){
+        if($use_rand){
             unset($where_cache['vod_id']);
             $where_cache['order'] = 'rnd';
         }
@@ -615,6 +722,7 @@ class Vod extends Base {
         unset($data['uptime']);
         unset($data['uptag']);
 
+        $data = VodValidate::formatDataBeforeDb($data);
         if(!empty($data['vod_id'])){
             $where=[];
             $where['vod_id'] = ['eq',$data['vod_id']];
@@ -626,7 +734,10 @@ class Vod extends Base {
             $data['vod_plot_detail']='';
             $data['vod_time_add'] = time();
             $data['vod_time'] = time();
-            $res = $this->allowField(true)->insert($data);
+            $res = $this->allowField(true)->insert($data, false, true);
+            if ($res > 0 && model('VodSearch')->isFrontendEnabled()) {
+                model('VodSearch')->checkAndUpdateTopResults(['vod_id' => $res] + $data);
+            }
         }
         if(false === $res){
             return ['code'=>1002,'msg'=>lang('save_err').'：'.$this->getError() ];
